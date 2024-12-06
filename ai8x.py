@@ -19,6 +19,8 @@ from torch import nn
 from torch.autograd import Function
 from torch.fx import symbolic_trace
 
+from tqdm import tqdm
+
 import devices
 
 dev = None
@@ -435,45 +437,6 @@ class OutputShiftPassthrough(nn.Module):
         return x
 
 
-def interp(x, xp, fp, method='linear'):
-    """
-    Simple PyTorch implementation of `np.interp`.
-    1D data only, length must be 2 or greater.
-    `method` must be "linear" or "lower".
-    """
-    # Find the index
-    n = len(xp) - 1
-    if n == 0:
-        return fp[0]
-    if x == 1.:
-        return fp[-1]
-    i = torch.clip(torch.searchsorted(xp, x, side='right').unsqueeze(0), 1, n) - 1
-    # Calculate fractional index
-    if method == 'linear':
-        g = x * n - i
-    else:
-        assert method == 'lower'
-        g = .0
-    # Interpolate result
-    return fp[i] + g * (fp[i + 1] - fp[i])
-
-
-def quantile(x, q, method='linear'):
-    """
-    Ersatz quantile function in PyTorch that works with torch.compile().
-    1D data only, len(x) must be 2 or greater.
-    `method` must be "linear" or "lower".
-    """
-    x = x.flatten()
-    n = len(x)
-    return interp(
-        q,
-        torch.linspace(1 / (2 * n), (2 * n - 1) / (2 * n), n, device=x.device),
-        torch.sort(x)[0],
-        method,
-    ).squeeze(0)
-
-
 class OutputShiftLimit(nn.Module):
     """
     Calculate the clamped output shift when adjusting during quantization-aware training.
@@ -484,7 +447,7 @@ class OutputShiftLimit(nn.Module):
 
     def forward(self, x, _):  # pylint: disable=arguments-differ
         """Forward prop"""
-        limit = quantile(x.abs(), self.shift_quantile)
+        limit = torch.quantile(x.abs(), self.shift_quantile)
         return -(1./limit).log2().floor().clamp(min=-15., max=15.)
 
 
@@ -2263,6 +2226,26 @@ def apply_scales(model):
                                 prev_threshold_set = True
                             module1.final_scale = nn.Parameter(torch.tensor(0.),
                                                                requires_grad=False)
+
+
+@torch.no_grad()
+def stat_collect(train_loader, model, args):
+    """Collect statistics for quantization aware training"""
+    model.eval()
+    for inputs, _ in tqdm(train_loader):
+        inputs = inputs.to(args.device)
+        model(inputs)
+
+
+def pre_qat(model, train_loader, args, qat_policy):
+    """
+    Prepare the model for quantization aware training
+    """
+    init_hist(model)
+    stat_collect(train_loader, model, args)
+    init_threshold(model, qat_policy["outlier_removal_z_score"])
+    release_hist(model)
+    apply_scales(model)
 
 
 def init_hist(model):
