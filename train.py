@@ -46,6 +46,8 @@ train():
         optimizer.step()
         compression_scheduler.on_minibatch_end(epoch)
 """
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
 
 import copy
 import fnmatch
