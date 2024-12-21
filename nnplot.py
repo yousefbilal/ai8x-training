@@ -57,7 +57,7 @@ def confusion_matrix(cm, labels, normalize=False):
 
     fig = matfig.Figure(figsize=(figsize, figsize), dpi=96, facecolor='w', edgecolor='k')
     ax = fig.add_subplot(1, 1, 1)
-    ax.imshow(cm, cmap='jet')
+    im = ax.imshow(cm, cmap='Blues')
 
     strlabels = map(str, labels)
     classes = [re.sub(r'([a-z](?=[A-Z])|[A-Z](?=[A-Z][a-z]))', r'\1 ', x) for x in strlabels]
@@ -79,10 +79,13 @@ def confusion_matrix(cm, labels, normalize=False):
     ax.yaxis.set_label_position('left')
     ax.yaxis.tick_left()
 
+    thresh = (cm.max() + cm.min()) / 2.0
+    cmap_min, cmap_max = im.cmap(0), im.cmap(1.0)
     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        color = cmap_max if cm[i, j] < thresh else cmap_min
         ax.text(j, i, format(cm[i, j], 'd') if cm[i, j] != 0 else '.',
                 horizontalalignment='center',
-                fontsize=FONTSIZE, verticalalignment='center', color='white')
+                fontsize=FONTSIZE, verticalalignment='center', color=color)
     fig.set_tight_layout(True)
 
     buf = io.BytesIO()
