@@ -217,6 +217,29 @@ def get_desert_65_dataset(data, load_train, load_test):
 
     return train_dataset, test_dataset
 
+def get_desert_95_dataset(data, load_train, load_test):
+    (data_dir, args) = data
+
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            ai8x.normalize(args=args),
+        ]
+    )
+    root_dir = os.path.join(data_dir, "desert_95")
+    train_dataset = None
+    test_dataset = None
+    if load_train:
+        train_dataset = Desert(
+            root_dir=root_dir,
+            d_type="train",
+            transform=transform,
+        )
+
+    if load_test:
+        test_dataset = Desert(root_dir=root_dir, d_type="test", transform=transform)
+
+    return train_dataset, test_dataset
 
 datasets = [
     {
@@ -254,5 +277,11 @@ datasets = [
         "input": (3, 224, 224),
         "output": ("human", "no_human"),
         "loader": get_desert_65_dataset,
+    },
+    {
+        "name": "desert_95",
+        "input": (3, 224, 224),
+        "output": ("human", "no_human"),
+        "loader": get_desert_95_dataset,
     },
 ]
